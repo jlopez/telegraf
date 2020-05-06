@@ -118,14 +118,17 @@ func (*Ping) SampleConfig() string {
 }
 
 func (p *Ping) Gather(acc telegraf.Accumulator) error {
+	tags := make(map[string]string)
 	if p.Interface != "" && p.listenAddr == "" {
+		tags["interface"] = p.Interface
 		p.listenAddr = getAddr(p.Interface)
 	}
 
 	for _, host := range p.Urls {
+		tags["url"] = host
 		_, err := net.LookupHost(host)
 		if err != nil {
-			acc.AddFields("ping", map[string]interface{}{"result_code": 1}, map[string]string{"url": host})
+			acc.AddFields("ping", map[string]interface{}{"result_code": 1}, tags)
 			acc.AddError(err)
 			continue
 		}
@@ -136,9 +139,9 @@ func (p *Ping) Gather(acc telegraf.Accumulator) error {
 
 			switch p.Method {
 			case "native":
-				p.pingToURLNative(host, acc)
+				p.pingToURLNative(host, acc, tags)
 			default:
-				p.pingToURL(host, acc)
+				p.pingToURL(host, acc, tags)
 			}
 		}(host)
 	}
@@ -194,7 +197,7 @@ func hostPinger(binary string, timeout float64, args ...string) (string, error) 
 	return string(out), err
 }
 
-func (p *Ping) pingToURLNative(destination string, acc telegraf.Accumulator) {
+func (p *Ping) pingToURLNative(destination string, acc telegraf.Accumulator, tags map[string]string) {
 	ctx := context.Background()
 
 	network := "ip4"
@@ -207,7 +210,7 @@ func (p *Ping) pingToURLNative(destination string, acc telegraf.Accumulator) {
 		acc.AddFields(
 			"ping",
 			map[string]interface{}{"result_code": 1},
-			map[string]string{"url": destination},
+			tags,
 		)
 		acc.AddError(err)
 		return
@@ -312,14 +315,13 @@ finish:
 		log.Printf("D! [inputs.ping] %s", doErr.Error())
 	}
 
-	tags, fields := onFin(packetsSent, rsps, doErr, destination)
+	fields := onFin(packetsSent, rsps, doErr, destination)
 	acc.AddFields("ping", fields, tags)
 }
 
-func onFin(packetsSent int, resps []*ping.Response, err error, destination string) (map[string]string, map[string]interface{}) {
+func onFin(packetsSent int, resps []*ping.Response, err error, destination string) map[string]interface{} {
 	packetsRcvd := len(resps)
 
-	tags := map[string]string{"url": destination}
 	fields := map[string]interface{}{
 		"result_code":         0,
 		"packets_transmitted": packetsSent,
@@ -330,7 +332,7 @@ func onFin(packetsSent int, resps []*ping.Response, err error, destination strin
 		if err != nil {
 			fields["result_code"] = 2
 		}
-		return tags, fields
+		return fields
 	}
 
 	if packetsRcvd == 0 {
@@ -338,7 +340,7 @@ func onFin(packetsSent int, resps []*ping.Response, err error, destination strin
 			fields["result_code"] = 1
 		}
 		fields["percent_packet_loss"] = float64(100)
-		return tags, fields
+		return fields
 	}
 
 	fields["percent_packet_loss"] = float64(packetsSent-packetsRcvd) / float64(packetsSent) * 100
@@ -376,7 +378,7 @@ func onFin(packetsSent int, resps []*ping.Response, err error, destination strin
 	fields["maximum_response_ms"] = float64(max.Nanoseconds()) / float64(time.Millisecond)
 	fields["standard_deviation_ms"] = float64(stdDev.Nanoseconds()) / float64(time.Millisecond)
 
-	return tags, fields
+	return fields
 }
 
 // Init ensures the plugin is configured correctly.

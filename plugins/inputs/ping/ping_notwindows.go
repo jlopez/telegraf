@@ -15,8 +15,7 @@ import (
 	"github.com/influxdata/telegraf"
 )
 
-func (p *Ping) pingToURL(u string, acc telegraf.Accumulator) {
-	tags := map[string]string{"url": u}
+func (p *Ping) pingToURL(u string, acc telegraf.Accumulator, tags map[string]string) {
 	fields := map[string]interface{}{"result_code": 0}
 
 	out, err := p.pingHost(p.Binary, 60.0, p.args(u, runtime.GOOS)...)

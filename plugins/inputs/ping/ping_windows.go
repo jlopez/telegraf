@@ -12,12 +12,11 @@ import (
 	"github.com/influxdata/telegraf"
 )
 
-func (p *Ping) pingToURL(u string, acc telegraf.Accumulator) {
+func (p *Ping) pingToURL(u string, acc telegraf.Accumulator, tags map[string]string) {
 	if p.Count < 1 {
 		p.Count = 1
 	}
 
-	tags := map[string]string{"url": u}
 	fields := map[string]interface{}{"result_code": 0}
 
 	args := p.args(u)
